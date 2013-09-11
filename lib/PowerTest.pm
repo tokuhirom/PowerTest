@@ -19,43 +19,64 @@ use constant {
 
 our @EXPORT = qw(diag ok done_testing);
 
-our $CNT = 0;
+
+{
+    package PowerTest::Context::TAP;
+
+    sub new {
+        my $class = shift;
+        bless {
+            count => 0,
+        }, $class;
+    }
+
+    sub proclaim {
+        my ($self, $cond, $desc) = @_;
+        $self->{count}++;
+        print !$cond ? 'not ' : '';
+        print "ok $self->{count}";
+        if (defined $desc) {
+            print " - $desc";
+        }
+        print "\n";
+    }
+
+    sub diag {
+        my $self = shift;
+
+        for (@_) {
+            if (defined $_) {
+                for (split /\n/, $_) {
+                    print STDERR "# $_\n";
+                }
+            } else {
+                print STDERR "# undef\n";
+            }
+        }
+    }
+
+    sub done_testing {
+        my $self = shift;
+        print "1..$self->{count}\n";
+    }
+}
+
 our @OP_STACK;
 our @TAP_RESULTS;
 our $ROOT;
 our $DEPARSE = B::Deparse->new;
+our $CONTEXT = PowerTest::Context::TAP->new();
 
-sub proclaim {
-    my ($cond, $desc) = @_;
-    $CNT++;
-    print !$cond ? 'not ' : '';
-    print "ok $CNT";
-    if (defined $desc) {
-        print " - $desc";
-    }
-    print "\n";
-}
-
-sub diag {
-    for (@_) {
-        if (defined $_) {
-            for (split /\n/, $_) {
-                print STDERR "# $_\n";
-            }
-        } else {
-            print STDERR "# undef\n";
-        }
-    }
-}
+sub diag { $CONTEXT->diag(@_) }
+sub done_testing { $CONTEXT->done_testing }
 
 sub null {
     my $op = shift;
     return class($op) eq "NULL";
 }
 
-sub done_testing {
-    print "1..$CNT\n";
-}
+
+our %FH_CACHE;
 
 sub ok(&) {
     my $code = shift;
@@ -65,6 +86,11 @@ sub ok(&) {
     local @TAP_RESULTS;
     local @OP_STACK;
     local $ROOT = $cv->ROOT;
+
+    # TODO: support FromLine feature
+    # TODO: support subtest
+    # TODO: support method call
+    # TODO: exit by non-zero while the test case was failed.
 
     my $root = $cv->ROOT;
     # local $B::overlay = {};
@@ -84,15 +110,15 @@ sub ok(&) {
         };
         local $@;
         if (eval { $code->() }) {
-            proclaim(1);
+            $CONTEXT->proclaim(1);
         } else {
-            proclaim(0);
-            diag $@ if $@;
+            $CONTEXT->proclaim(0);
+            $CONTEXT->diag($@) if $@;
             local $Data::Dumper::Terse = 1;
             local $Data::Dumper::Indent = 0;
             for my $result (@TAP_RESULTS) {
-                diag($DEPARSE->deparse($OP_STACK[$result->[RESULT_OPINDEX]]));
-                diag("   => " . Data::Dumper::Dumper($result->[RESULT_VALUE]));
+                $CONTEXT->diag($DEPARSE->deparse($OP_STACK[$result->[RESULT_OPINDEX]]));
+                $CONTEXT->diag("   => " . Data::Dumper::Dumper($result->[RESULT_VALUE]));
             }
         }
         if (0) {
