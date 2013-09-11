@@ -8,10 +8,10 @@ our $VERSION = "0.01";
 
 use B qw(class);
 use B::Generate;
-use B::Utils qw(walkoptree_simple);
 use B::Deparse;
 use B::Concise;
 use Data::Dumper ();
+use B::Utils qw(walkoptree_simple);
 use constant {
     RESULT_VALUE => 0,
     RESULT_OPINDEX => 1,
@@ -22,6 +22,7 @@ our @EXPORT = qw(diag ok done_testing);
 our $CNT = 0;
 our @OP_STACK;
 our @TAP_RESULTS;
+our $ROOT;
 our $DEPARSE = B::Deparse->new;
 
 sub proclaim {
@@ -59,10 +60,11 @@ sub done_testing {
 sub ok(&) {
     my $code = shift;
 
+    my $cv= B::svref_2object($code);
+
     local @TAP_RESULTS;
     local @OP_STACK;
-
-    my $cv= B::svref_2object($code);
+    local $ROOT = $cv->ROOT;
 
     my $root = $cv->ROOT;
     # local $B::overlay = {};
@@ -74,15 +76,13 @@ sub ok(&) {
                 my $walker = B::Concise::compile('', '', $code);
                 $walker->();
             }
-            {
-                my $walker = B::Concise::compile('-exec', '', $code);
-                $walker->();
-            }
         };
-        if ($code->()) {
+        local $@;
+        if (eval { $code->() }) {
             proclaim(1);
         } else {
             proclaim(0);
+            diag $@ if $@;
             local $Data::Dumper::Terse = 1;
             local $Data::Dumper::Indent = 0;
             for my $result (@TAP_RESULTS) {
@@ -113,43 +113,51 @@ sub B::OP::power_test {
     # warn $self->name;
 }
 
+sub find_prev {
+    my ($root, $op) = @_;
+    printf "Finding $$op @{[ $op->name ]}\n";
+    for my $e ($root->descendants) {
+        printf("  next: %s %d\n", $e->next->name, ${$e->next});
+        if ($$op == ${$e->next}) {
+            return $e;
+        }
+    }
+}
+
 sub B::BINOP::power_test {
     my $self = shift;
-    if ($self->name eq 'eq') {
-        my $target = $self->first;
-
-        my $pushmark = B::OP->new('pushmark', 0);
-        my $gv = B::SVOP->new('gv', 0, *tap);
-        my $rv2cv = B::UNOP->new('rv2cv', 0, $gv);
-        my $list = B::LISTOP->new('list', 0, undef, undef);
-        my $entersub = B::UNOP->new(
-            'entersub',
-            $target->flags, # really?
-            undef,
-        );
-        push @OP_STACK, $target;
-        my $target_op_idx = B::SVOP->new('const', 0, 0+@OP_STACK-1);
-
-        # Connect nodes siblings.
-        $pushmark->sibling($target);
-        $target->sibling($target_op_idx);
-        $target_op_idx->sibling($rv2cv);
-        $list->first($pushmark);
-        $list->last($rv2cv);
-        my $n = "$entersub"; # fucking magic stmt. do not remove me.
-        $entersub->first($list);
-        $entersub->sibling($self->last);
-
-        my $entrypoint = [$self->parent->kids]->[0]->next();
-
-        # Connect nodes next links.
-        [$self->parent->kids]->[0]->next($pushmark);
-        $pushmark->next($entrypoint);
-        $target->next($target_op_idx);
-        $target_op_idx->next($gv);
-        $gv->next($entersub);
-        $entersub->next($self->last);
-        $self->first($entersub);
+    my %supported_ops = (
+        map { $_ => 1 }
+        qw(
+         eq  ne  gt  ge  lt  le
+        seq sne sgt sge slt sle)
+    );
+    if ($supported_ops{$self->name}) {
+        if ($self->first->name ne 'const') {
+            my $entersub = wrap_by_tap(
+                $self->first,
+                [$self->parent->kids]->[0]->next(),
+                sub {
+                    [$self->parent->kids]->[0]->next(@_);
+                }
+            );
+            $entersub->next($self->last);
+            $entersub->sibling($self->last);
+            $self->first($entersub);
+        }
+        if ($self->last->name ne 'const') {
+            my $nnext = $self->last->next;
+            my $entersub = wrap_by_tap(
+                $self->last,
+                $self->first->next,
+                sub {
+                    $self->first->next(@_),
+                }
+            );
+            $self->first->sibling($entersub);
+            $entersub->next($nnext);
+            $self->last($entersub);
+        }
 
     #   UNOP (0x1ac6b18) entersub [1]
     #       UNOP (0x1ac6b90) null [147]
@@ -160,6 +168,39 @@ sub B::BINOP::power_test {
     }
 }
 
+sub wrap_by_tap {
+    my ($target, $entrypoint, $set_entrypoint) = @_;
+
+    my $pushmark = B::OP->new('pushmark', 0);
+    my $gv = B::SVOP->new('gv', 0, *tap);
+    my $rv2cv = B::UNOP->new('rv2cv', 0, $gv);
+    my $list = B::LISTOP->new('list', 0, undef, undef);
+    my $entersub = B::UNOP->new(
+        'entersub',
+        $target->flags, # really?
+        undef,
+    );
+    push @OP_STACK, $target;
+    my $target_op_idx = B::SVOP->new('const', 0, 0+@OP_STACK-1);
+
+    # Connect nodes siblings.
+    $pushmark->sibling($target);
+    $target->sibling($target_op_idx);
+    $target_op_idx->sibling($rv2cv);
+    $list->first($pushmark);
+    $list->last($rv2cv);
+    my $n = "$entersub"; # fucking magic stmt. do not remove me.
+    $entersub->first($list);
+
+    # Connect nodes next links.
+    $set_entrypoint->($pushmark);
+    $pushmark->next($entrypoint);
+    $target->next($target_op_idx);
+    $target_op_idx->next($gv);
+    $gv->next($entersub);
+
+    return $entersub;
+}
 
 sub tap {
     my ($stuff, $target_op_idx) = @_;
