@@ -6,6 +6,8 @@ PowerTest - It's new $module
 
     use PowerTest;
 
+    t { $a == $b };
+
 # DESCRIPTION
 
 PowerTest is ...

@@ -42,6 +42,8 @@
       },
       "runtime" : {
          "requires" : {
+            "B::Generate" : "0",
+            "B::Utils" : "0",
             "perl" : "5.008005"
          }
       },
@@ -52,5 +54,16 @@
       }
    },
    "release_status" : "unstable",
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/tokuhirom/PowerTest/issues"
+      },
+      "homepage" : "https://github.com/tokuhirom/PowerTest",
+      "repository" : {
+         "type" : "git",
+         "url" : "git://github.com/tokuhirom/PowerTest.git",
+         "web" : "https://github.com/tokuhirom/PowerTest"
+      }
+   },
    "version" : "0.01"
 }
