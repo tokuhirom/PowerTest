@@ -1,9 +1,10 @@
 use strict;
 use Test::More;
 
-use_ok $_ for qw(
+package Foo;
+::use_ok $_ for qw(
     PowerTest
 );
 
-done_testing;
+::done_testing;
 
