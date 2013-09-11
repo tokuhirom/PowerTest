@@ -70,6 +70,11 @@ sub ok(&) {
     # local $B::overlay = {};
     if (not null $root) {
         my $lineseq = $root->first;
+      # for my $node ($cv->ROOT->descendants) {
+      #     if (class($node) eq 'BINOP') {
+      #         B::BINOP::power_test($node);
+      #     }
+      # }
         B::walkoptree($cv->ROOT, 'power_test');
         if (0) {
             {
@@ -172,25 +177,22 @@ sub wrap_by_tap {
     my ($target, $entrypoint, $set_entrypoint) = @_;
 
     my $pushmark = B::OP->new('pushmark', 0);
+    $pushmark->sibling($target);
+
     my $gv = B::SVOP->new('gv', 0, *tap);
     my $rv2cv = B::UNOP->new('rv2cv', 0, $gv);
-    my $list = B::LISTOP->new('list', 0, undef, undef);
+    my $list = B::LISTOP->new('list', 0, $pushmark, $rv2cv);
+
+    push @OP_STACK, $target;
+    my $target_op_idx = B::SVOP->new('const', 0, 0+@OP_STACK-1);
+    $target->sibling($target_op_idx);
+    $target_op_idx->sibling($rv2cv);
+
     my $entersub = B::UNOP->new(
         'entersub',
         $target->flags, # really?
-        undef,
+        $list,
     );
-    push @OP_STACK, $target;
-    my $target_op_idx = B::SVOP->new('const', 0, 0+@OP_STACK-1);
-
-    # Connect nodes siblings.
-    $pushmark->sibling($target);
-    $target->sibling($target_op_idx);
-    $target_op_idx->sibling($rv2cv);
-    $list->first($pushmark);
-    $list->last($rv2cv);
-    my $n = "$entersub"; # fucking magic stmt. do not remove me.
-    $entersub->first($list);
 
     # Connect nodes next links.
     $set_entrypoint->($pushmark);
