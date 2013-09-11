@@ -1,12 +1,12 @@
 # NAME
 
-PowerTest - It's new $module
+PowerTest - With great power, comes great responsibility.
 
 # SYNOPSIS
 
     use PowerTest;
 
-    t { $a == $b };
+    ok { $a == $b };
 
 # DESCRIPTION
 
