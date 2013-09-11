@@ -15,6 +15,7 @@ use PowerTest;
 
 sub foo { 3 }
 ok { foo() == 2 };
+ok { foo() == 3 };
 done_testing;
 ...
     }
@@ -23,7 +24,8 @@ done_testing;
 not ok 1
 # Sandbox::foo()
 #    => 3
-1..1
+ok 2
+1..2
 ...
     diag $out;
 }
