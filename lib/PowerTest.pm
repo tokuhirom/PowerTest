@@ -7,8 +7,6 @@ use parent qw(Exporter);
 our $VERSION = "0.01";
 
 use B::Deparse;
-use Cwd ();
-use File::Spec;
 use Data::Dumper ();
 use List::Util ();
 use Text::Truncate qw(truncstr);
@@ -20,11 +18,9 @@ use constant {
 };
 
 use PowerTest::Core;
-
+use PowerTest::FromLine;
 
 our @EXPORT = qw(diag ok done_testing describe context it);
-
-
 
 our $DEPARSE = B::Deparse->new;
 our $CONTEXT = do {
@@ -86,43 +82,12 @@ sub it {
 sub diag { $CONTEXT->diag(@_) }
 sub done_testing { $CONTEXT->done_testing }
 
-our %FH_CACHE;
-
-our $BASE_DIR = Cwd::getcwd();
-our %FILECACHE;
-
-sub inspect_line {
-    my $level = shift;
-
-    my ($package, $filename, $line_no) = caller($level+1);
-    my $line = sub {
-        undef $filename if $filename eq '-e';
-        if (defined $filename) {
-            $filename = File::Spec->rel2abs($filename, $BASE_DIR);
-            my $file = $FILECACHE{$filename} ||= [
-                do {
-                    # Do not die if we can't open the file
-                    open my $fh, '<', $filename
-                        or return '';
-                    <$fh>
-                }
-            ];
-            my $line = $file->[ $line_no - 1 ];
-            $line =~ s{^\s+|\s+$}{}g;
-            $line;
-        } else {
-            "";
-        }
-    }->();
-    return ($package, $filename, $line_no, $line);
-}
-
 sub ok(&) {
     my $code = shift;
 
     # TODO: support method call
 
-    my ($package, $filename, $line_no, $line) = inspect_line(0);
+    my ($package, $filename, $line_no, $line) = PowerTest::FromLine::inspect_line(0);
 
     local $@;
     my ($retval, $err, $tap_results, $op_stack)
