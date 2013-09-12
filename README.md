@@ -6,11 +6,17 @@ PowerTest - With great power, comes great responsibility.
 
     use PowerTest;
 
-    ok { $a == $b };
+    describe 'MyClass' => sub {
+        describe '#foo' => sub {
+            ok { MyClass->foo() == 3 };
+        }
+    };
 
 # DESCRIPTION
 
-PowerTest is ...
+__WARNINGS: This module is currently ALPHA state. Any APIs will change without notice. And this module uses the B power, it may cause segmentation fault.__
+
+PowerTest is yet another testing framework.
 
 # LICENSE
 

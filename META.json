@@ -44,6 +44,9 @@
          "requires" : {
             "B::Generate" : "0",
             "B::Utils" : "0",
+            "Module::Load" : "0",
+            "Scope::Guard" : "0",
+            "Text::Truncate" : "0",
             "perl" : "5.008005"
          }
       },
