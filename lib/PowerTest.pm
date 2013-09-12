@@ -305,17 +305,6 @@ sub B::OP::power_test {
     # warn $self->name;
 }
 
-sub find_prev {
-    my ($root, $op) = @_;
-    printf "Finding $$op @{[ $op->name ]}\n";
-    for my $e ($root->descendants) {
-        printf("  next: %s %d\n", $e->next->name, ${$e->next});
-        if ($$op == ${$e->next}) {
-            return $e;
-        }
-    }
-}
-
 sub B::BINOP::power_test {
     my $self = shift;
     my %supported_ops = (
