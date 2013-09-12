@@ -31,15 +31,20 @@ our @EXPORT = qw(diag ok done_testing describe context it);
     sub new {
         my $class = shift;
         bless {
-            count => 0,
+            count  => 0,
+            failed => 0,
         }, $class;
     }
     sub done { $_[0]->{done} }
+    sub failed { !!$_[0]->{failed} }
 
     sub proclaim {
         my ($self, $cond, $lineno, $line) = @_;
         $self->{count}++;
-        print !$cond ? 'not ' : '';
+        if (!$cond) {
+            $self->{failed}++;
+            print 'not ';
+        }
         print "ok $self->{count}";
         print " - L$lineno";
         if (length($line) > 0) {
@@ -98,6 +103,9 @@ END {
     unless ($CONTEXT->done) {
         $CONTEXT->done_testing;
     }
+    if ($CONTEXT->failed) {
+        $? = 1;
+    }
 }
 
 sub describe {
@@ -144,10 +152,7 @@ sub ok(&) {
     local @OP_STACK;
     local $ROOT = $cv->ROOT;
 
-    # TODO: support FromLine feature
-    # TODO: support subtest
     # TODO: support method call
-    # TODO: exit by non-zero while the test case was failed.
 
     my ($package, $filename, $line_no) = caller(0);
     my $line = sub {

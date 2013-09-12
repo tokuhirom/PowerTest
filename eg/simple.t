@@ -6,6 +6,7 @@ use PowerTest;
     package Foo;
     sub bar { 5963 }
 }
+ok { 1 };
 
 describe 'Array' => sub {
     describe '#indexOf()' => sub {
