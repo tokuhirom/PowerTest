@@ -6,5 +6,7 @@ package Foo;
     PowerTest
 );
 
+$PowerTest::TESTING_ITSELF++;
+
 ::done_testing;
 
