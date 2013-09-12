@@ -14,16 +14,19 @@ use Cwd ();
 use File::Spec;
 use Data::Dumper ();
 use B::Utils qw(walkoptree_simple);
+use Scope::Guard;
+use List::Util ();
+use Text::Truncate qw(truncstr);
 use constant {
     RESULT_VALUE => 0,
     RESULT_OPINDEX => 1,
 };
 
-our @EXPORT = qw(diag ok done_testing);
-
+our @EXPORT = qw(diag ok done_testing describe context it);
 
 {
     package PowerTest::Context::TAP;
+    use Term::ANSIColor qw(colored);
 
     sub new {
         my $class = shift;
@@ -31,6 +34,7 @@ our @EXPORT = qw(diag ok done_testing);
             count => 0,
         }, $class;
     }
+    sub done { $_[0]->{done} }
 
     sub proclaim {
         my ($self, $cond, $lineno, $line) = @_;
@@ -60,12 +64,16 @@ our @EXPORT = qw(diag ok done_testing);
 
     sub done_testing {
         my $self = shift;
+        $self->{done}++;
         print "1..$self->{count}\n";
     }
-}
 
-sub read_file {
-    my $fname = shift;
+    sub push_subtest {
+        my ($self, $title) = @_;
+        push @{$self->{subtests}}, $title;
+        $self->diag(colored(join('/', @{$self->{subtests}}), 'green'));
+        return Scope::Guard->new(sub { pop @{$self->{subtests}} });
+    }
 }
 
 our @OP_STACK;
@@ -73,6 +81,46 @@ our @TAP_RESULTS;
 our $ROOT;
 our $DEPARSE = B::Deparse->new;
 our $CONTEXT = PowerTest::Context::TAP->new();
+our @DESCRIBE;
+our $IN_ENDING = 0;
+our $DUMP_CUTOFF = 80;
+
+END {
+    $IN_ENDING = 1;
+    if ($ENV{POWER_TEST_SHUFFLE}) {
+        @DESCRIBE = List::Util::shuffle(@DESCRIBE);
+    }
+
+    while (my ($title, $code) = splice @DESCRIBE, 0, 2) {
+        my $guard = $CONTEXT->push_subtest($title);
+        $code->();
+    }
+    unless ($CONTEXT->done) {
+        $CONTEXT->done_testing;
+    }
+}
+
+sub describe {
+    my ($title, $code) = @_;
+    if ($IN_ENDING) {
+        my $guard = $CONTEXT->push_subtest($title);
+        $code->();
+    } else {
+        push @DESCRIBE, $title, $code;
+    }
+}
+
+sub context {
+    my ($title, $code) = @_;
+    my $guard = $CONTEXT->push_subtest($title);
+    $code->();
+}
+
+sub it {
+    my ($title, $code) = @_;
+    my $guard = $CONTEXT->push_subtest($title);
+    $code->();
+}
 
 sub diag { $CONTEXT->diag(@_) }
 sub done_testing { $CONTEXT->done_testing }
@@ -81,7 +129,6 @@ sub null {
     my $op = shift;
     return class($op) eq "NULL";
 }
-
 
 our %FH_CACHE;
 
@@ -149,7 +196,7 @@ sub ok(&) {
             local $Data::Dumper::Indent = 0;
             for my $result (@TAP_RESULTS) {
                 $CONTEXT->diag($DEPARSE->deparse($OP_STACK[$result->[RESULT_OPINDEX]]));
-                $CONTEXT->diag("   => " . Data::Dumper::Dumper($result->[RESULT_VALUE]));
+                $CONTEXT->diag("   => " . truncstr(Data::Dumper::Dumper($result->[RESULT_VALUE]), $DUMP_CUTOFF, '...'));
             }
         }
         if (0) {
