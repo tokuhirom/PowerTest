@@ -10,6 +10,8 @@ use B qw(class);
 use B::Generate;
 use B::Deparse;
 use B::Concise;
+use Cwd ();
+use File::Spec;
 use Data::Dumper ();
 use B::Utils qw(walkoptree_simple);
 use constant {
@@ -31,12 +33,13 @@ our @EXPORT = qw(diag ok done_testing);
     }
 
     sub proclaim {
-        my ($self, $cond, $desc) = @_;
+        my ($self, $cond, $lineno, $line) = @_;
         $self->{count}++;
         print !$cond ? 'not ' : '';
         print "ok $self->{count}";
-        if (defined $desc) {
-            print " - $desc";
+        print " - L$lineno";
+        if (length($line) > 0) {
+            print ": $line";
         }
         print "\n";
     }
@@ -61,6 +64,10 @@ our @EXPORT = qw(diag ok done_testing);
     }
 }
 
+sub read_file {
+    my $fname = shift;
+}
+
 our @OP_STACK;
 our @TAP_RESULTS;
 our $ROOT;
@@ -78,6 +85,9 @@ sub null {
 
 our %FH_CACHE;
 
+our $BASE_DIR = Cwd::getcwd();
+our %FILECACHE;
+
 sub ok(&) {
     my $code = shift;
 
@@ -91,6 +101,27 @@ sub ok(&) {
     # TODO: support subtest
     # TODO: support method call
     # TODO: exit by non-zero while the test case was failed.
+
+    my ($package, $filename, $line_no) = caller(0);
+    my $line = sub {
+        undef $filename if $filename eq '-e';
+        if (defined $filename) {
+            $filename = File::Spec->rel2abs($filename, $BASE_DIR);
+            my $file = $FILECACHE{$filename} ||= [
+                do {
+                    # Do not die if we can't open the file
+                    open my $fh, '<', $filename
+                        or return '';
+                    <$fh>
+                }
+            ];
+            my $line = $file->[ $line_no - 1 ];
+            $line =~ s{^\s+|\s+$}{}g;
+            $line;
+        } else {
+            "";
+        }
+    }->();
 
     my $root = $cv->ROOT;
     # local $B::overlay = {};
@@ -110,9 +141,9 @@ sub ok(&) {
         };
         local $@;
         if (eval { $code->() }) {
-            $CONTEXT->proclaim(1);
+            $CONTEXT->proclaim(1, $line_no, $line);
         } else {
-            $CONTEXT->proclaim(0);
+            $CONTEXT->proclaim(0, $line_no, $line);
             $CONTEXT->diag($@) if $@;
             local $Data::Dumper::Terse = 1;
             local $Data::Dumper::Indent = 0;
@@ -132,9 +163,9 @@ sub ok(&) {
         my $sv = $cv->const_sv;
         if ($$sv) {
             # uh-oh. inlinable sub... format it differently
-            proclaim($code->());
+            proclaim($code->(), $line_no, $line);
         } else { # XSUB? (or just a declaration)
-            proclaim($code->());
+            proclaim($code->(), $line_no, $line);
         }
     }
 }

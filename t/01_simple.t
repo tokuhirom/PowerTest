@@ -21,10 +21,10 @@ done_testing;
     }
     ok(!$@) or diag $@;
     is($out, <<'...');
-not ok 1
+not ok 1 - L5
 # Sandbox::foo()
 #    => 3
-ok 2
+ok 2 - L6
 1..2
 ...
     diag $out;
