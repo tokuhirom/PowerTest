@@ -18,6 +18,22 @@ __WARNINGS: This module is currently ALPHA state. Any APIs will change without n
 
 PowerTest is yet another testing framework.
 
+PowerTest shows progress data if it's failes. For example, here is a testing script using PowerTest. This test may fail.
+
+    use PowerTest;
+
+    sub foo { 3 }
+    ok { foo() == 2 };
+
+Output is:
+
+    not ok 1 - L6: ok { foo() == 2 };
+    # foo()
+    #    => 3
+    1..1
+
+Woooooooh! It's pretty magical. PowerTest.pm shows the calcuration progress! You don't need to use different functions for testing types, like ok, cmp\_ok, is...
+
 # LICENSE
 
 Copyright (C) tokuhirom.

@@ -65,7 +65,9 @@ sub diag {
 sub done_testing {
     my $self = shift;
     $self->{done}++;
-    print "1..$self->{count}\n";
+    print 'not ' if $self->failed;
+    print "ok 1\n";
+    print "1..1\n";
 }
 
 sub push_subtest {
